@@ -1,11 +1,13 @@
 import math
 import re
 
-import mechanize
+from selenium import webdriver
+from selenium.webdriver.common.by import By
 from lxml import html
+import time
 
 from data import *
-
+from funcs import chrome_options
 '''
 ----- setupCalc -----
 Setup Calc takes the user information for accessing GPRO and calculates the entire car setup
@@ -14,17 +16,16 @@ for the weekend, including session weather and temperature.
 
 
 def setupCalc(username, password, weather, sessionTemp):
-	browser = mechanize.Browser()
-	browser.open("https://gpro.net/gb/Login.asp")
-	browser.select_form(id="Form1")
-	browser.form["textLogin"] = username
-	browser.form["textPassword"] = password
-	browser.submit()
+	driver = webdriver.Chrome(options=chrome_options)
+	driver.get("https://gpro.net/gb/Login.asp")
+	driver.find_element(By.NAME, "textLogin").send_keys(username)
+	driver.find_element(By.NAME, "textPassword").send_keys(password)
+	driver.find_element(By.ID, "LogonFake").click()
+	time.sleep(1)
 
 	# Request the driver information page and scrape the driver data
-	browser.follow_link(url_regex=re.compile("DriverProfile"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=24589")
+	tree = html.fromstring(driver.page_source)
 
 	driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
 	driverTalent = int(tree.xpath("normalize-space(//td[contains(@id, 'Talent')]/text())"))
@@ -34,17 +35,15 @@ def setupCalc(username, password, weather, sessionTemp):
 	driverWeight = int(tree.xpath("normalize-space(//tr[contains(@data-step, '14')]//td/text())"))
 
 	# Request the track information page and scrape the track data
-	browser.follow_link(url_regex=re.compile("TrackDetails"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/TrackDetails.asp")
+	tree = html.fromstring(driver.page_source)
 
 	trackName = str(tree.xpath("normalize-space(//h1[contains(@class, 'block')]/text())"))
 	trackName = trackName.strip()
 
 	# Request race strategy pace and scrape the race weather data
-	browser.follow_link(url_regex=re.compile("RaceSetup"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/RaceSetup.asp")
+	tree = html.fromstring(driver.page_source)
 
 	rTempRangeOne = str(tree.xpath("normalize-space(//td[contains(text(), 'Temp')]/../../tr[2]/td[1]/text())"))
 	rTempRangeTwo = str(tree.xpath("normalize-space(//td[contains(text(), 'Temp')]/../../tr[2]/td[2]/text())"))
@@ -77,10 +76,10 @@ def setupCalc(username, password, weather, sessionTemp):
 		sessionTemp = qTwoTemp
 
 	# Request the car information page and scrape the car character and part level and wear data
-	browser.follow_link(url_regex=re.compile("UpdateCar"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
-
+	driver.get("https://gpro.net/gb/UpdateCar.asp")
+	tree = html.fromstring(driver.page_source)
+	driver.quit()
+ 
 	# Level
 	carLevelChassis = int(tree.xpath("normalize-space(//b[contains(text(), 'Chassis')]/../../td[2]/text())"))
 	carLevelEngine = int(tree.xpath("normalize-space(//b[contains(text(), 'Engine')]/../../td[2]/text())"))
@@ -316,17 +315,16 @@ def strategyCalc(username, password, minimumWear, laps):
     We would LIKE to also take clear track risk into account, but I don't know how risk fits into the equation, so simply cannot add it accurately.
     '''
 
-	browser = mechanize.Browser()
-	browser.open("https://gpro.net/gb/Login.asp")
-	browser.select_form(id="Form1")
-	browser.form["textLogin"] = username
-	browser.form["textPassword"] = password
-	browser.submit()
+	driver = webdriver.Chrome(options=chrome_options)
+	driver.get("https://gpro.net/gb/Login.asp")
+	driver.find_element(By.NAME, "textLogin").send_keys(username)
+	driver.find_element(By.NAME, "textPassword").send_keys(password)
+	driver.find_element(By.ID, "LogonFake").click()
+	time.sleep(1)
 
 	# Request the track information page and scrape the track data
-	browser.follow_link(url_regex=re.compile("TrackDetails"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/TrackDetails.asp")
+	tree = html.fromstring(driver.page_source)
 
 	trackName = str(tree.xpath("normalize-space(//h1[contains(@class, 'block')]/text())"))
 	trackName = trackName.strip()
@@ -350,9 +348,8 @@ def strategyCalc(username, password, minimumWear, laps):
 
 	# Check, while we're here, if the manager has a Technical Director and if they do, gather the TD stats
 	try:
-		browser.click_link(url_regex=re.compile("TechDProfile"))
-		technicalDirectorResult = html.fromstring(browser.response().get_data())
-		browser.back()
+		driver.get("https://gpro.net/gb/TechDProfile.asp")
+		technicalDirectorResult = html.fromstring(driver.page_source)
 
 		tree = html.fromstring(technicalDirectorResult.content)
 		tdExperience = int(tree.xpath("//th[contains(text(), 'Experience:')]/../td[0]/text()")[0])
@@ -365,17 +362,15 @@ def strategyCalc(username, password, minimumWear, laps):
 		tdPitCoordination = 0
 
 	# Request the staff page and scrape staff data
-	browser.follow_link(url_regex=re.compile("StaffAndFacilities"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/StaffAndFacilities.asp")
+	tree = html.fromstring(driver.page_source)
 
 	staffConcentration = int(tree.xpath("//th[contains(text(), 'Concentration:')]/../td/text()")[0])
 	staffStress = int(tree.xpath("//th[contains(text(), 'Stress handling:')]/../td/text()")[0])
 
 	# Request race strategy pace and scrape the race weather data
-	browser.follow_link(url_regex=re.compile("RaceSetup"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/RaceSetup.asp")
+	tree = html.fromstring(driver.page_source)
 
 	rTempRangeOne = str(tree.xpath("normalize-space(//td[contains(text(), 'Temp')]/../../tr[2]/td[1]/text())"))
 	rTempRangeTwo = str(tree.xpath("normalize-space(//td[contains(text(), 'Temp')]/../../tr[2]/td[2]/text())"))
@@ -395,16 +390,14 @@ def strategyCalc(username, password, minimumWear, laps):
 		rTempMinFour + rTempMaxFour)) / 8
 
 	# Request the manager page and scrape tyre data
-	browser.follow_link(url_regex=re.compile("Suppliers"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/Suppliers.asp")
+	tree = html.fromstring(driver.page_source)
 
 	tyreSupplierName = str(tree.xpath("//div[contains(@class, 'chosen')]/h2/text()")[0])
 
 	# Request the car information page and scrape the car character and part level and wear data
-	browser.follow_link(url_regex=re.compile("UpdateCar"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/UpdateCar.asp")
+	tree = html.fromstring(driver.page_source)
 
 	# Level
 	carLevelEngine = int(tree.xpath("normalize-space(//b[contains(text(), 'Engine')]/../../td[2]/text())"))
@@ -412,9 +405,9 @@ def strategyCalc(username, password, minimumWear, laps):
 	carLevelElectronics = int(tree.xpath("normalize-space(//b[contains(text(), 'Electronics')]/../../td[2]/text())"))
 
 	# Request the driver information page and scrape the driver data
-	browser.follow_link(url_regex=re.compile("DriverProfile"))
-	tree = html.fromstring(browser.response().get_data())
-	browser.back()
+	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=24589")
+	tree = html.fromstring(driver.page_source)
+	driver.quit()
 
 	driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
 	driverAggressiveness = int(tree.xpath("normalize-space(//td[contains(@id, 'Aggr')]/text())"))

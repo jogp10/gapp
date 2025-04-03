@@ -6,7 +6,11 @@ from pathlib import Path  # For data paths
 from tkinter import BOTH, DoubleVar, E, IntVar, S, StringVar, Tk, W, ttk  # To create the GUI
 from tkinter.ttk import Notebook  # For tabs in the GUI
 
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+
 from lxml import html
+import re
 
 # Import external data
 from calcs import profileCalc, setupCalc, strategyCalc, wearCalc
@@ -17,11 +21,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
                     datefmt='%y-%m-%d %H:%M')
 logger = logging.getLogger(__name__)
 # Handlers
-dataPath = str(Path.home()) + "\\Documents\\GAPP"
+dataPath = str(Path.home()) + "/Documents/GAPP"
 if not os.path.exists(dataPath):
     os.makedirs(dataPath)
-fLogFileName = str(Path.home()) + r"\Documents\GAPP\error.log"
-gLogFileName = str(Path.home()) + r"\Documents\GAPP\logging.log"
+fLogFileName = str(Path.home()) + r"/Documents/GAPP/error.log"
+gLogFileName = str(Path.home()) + r"/Documents/GAPP/logging.log"
 f_handler = logging.FileHandler(fLogFileName)
 g_handler = logging.FileHandler(gLogFileName)
 f_handler.setLevel(logging.ERROR)
@@ -49,7 +53,7 @@ class Autoresized_Notebook(Notebook):
 Data Storage Setup
 '''
 logger.info("Getting reference to GAPP folder in Documents for storage")
-dataPath = str(Path.home()) + "\\Documents\\GAPP"
+dataPath = str(Path.home()) + "/Documents/GAPP"
 if not os.path.exists(dataPath):
     try:
         logger.info("No GAPP folder found in documents, creating it")
@@ -57,7 +61,7 @@ if not os.path.exists(dataPath):
     except Exception:
         logger.exception("Unable to create GAPP folder in documents, GAPP may not have permissions to do so")
 
-filename = dataPath + "\\data.dat"
+filename = dataPath + "/data.dat"
 
 try:
     logger.info("Creating login data file")
@@ -126,6 +130,7 @@ def calculate(tab):
         logger.info("Getting user login details")
         username = str(inputUsername.get())
         password = str(inputPassword.get())
+        driver = webdriver.Chrome(options=chrome_options)
 
         logger.info("Checking user login details are correct and user is in Viper team")
         if (not checkLogin(username, password)):
@@ -202,19 +207,17 @@ def calculate(tab):
             username = entryUsername.get()
             password = entryPassword.get()
 
-            # Logon to GPRO using the logon information provided and store that under our session
-            browser = mechanize.Browser()
-            browser.open("https://gpro.net/gb/Login.asp")
-            browser.select_form(id="Form1")
-            browser.form["textLogin"] = username
-            browser.form["textPassword"] = password
-            browser.submit()
-
+            # Logon to GPRO using the logon information provided and store that under our session            
+            driver.get("https://gpro.net/gb/Login.asp")
+            driver.find_element(By.NAME, "textLogin").send_keys(username)
+            driver.find_element(By.NAME, "textPassword").send_keys(password)
+            driver.find_element(By.ID, "LogonFake").click()
+            time.sleep(1)
+            
             # Get the driver details
             logger.info("Getting Driver information")
-            browser.follow_link(url_regex=re.compile("DriverProfile"))
-            tree = html.fromstring(browser.response().get_data())
-            browser.back()
+            driver.get("https://gpro.net/gb/DriverProfile.asp?ID=24589")
+            tree = html.fromstring(driver.page_source)
             driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
             driverTalent = int(tree.xpath("normalize-space(//td[contains(@id, 'Talent')]/text())"))
             driverExperience = int(tree.xpath("normalize-space(//td[contains(@id, 'Experience')]/text())"))
@@ -223,9 +226,8 @@ def calculate(tab):
 
             # Get the track details
             logger.info("Getting track information")
-            browser.follow_link(url_regex=re.compile("TrackDetails"))
-            tree = html.fromstring(browser.response().get_data())
-            browser.back()
+            driver.get("https://gpro.net/gb/TrackDetails.asp")
+            tree = html.fromstring(driver.page_source)
             trackName = str(tree.xpath("normalize-space(//h1[contains(@class, 'block')]/text())"))
             trackName = trackName.strip()
 
@@ -303,16 +305,15 @@ def calculate(tab):
             # Create the logon payload and create the session
             username = entryUsername.get()
             password = entryPassword.get()
-            browser = mechanize.Browser()
-            browser.open("https://gpro.net/gb/Login.asp")
-            browser.select_form(id="Form1")
-            browser.form["textLogin"] = username
-            browser.form["textPassword"] = password
-            browser.submit()
+            driver.get("https://gpro.net/gb/Login.asp")
+            driver.find_element(By.NAME, "textLogin").send_keys(username)
+            driver.find_element(By.NAME, "textPassword").send_keys(password)
+            driver.find_element(By.ID, "LogonFake").click()
+            time.sleep(1)
 
             # Gather the session information for the upcoming or past race, based on input choice
             logger.info("Getting ID data for season and race")
-            tree = html.fromstring(browser.response().get_data())
+            tree = html.fromstring(driver.page_source)
             rawData = tree.xpath("normalize-space(//strong[contains(text(), 'Next race:')]/../text())")
             reSearch = re.findall(r"(\d{2}),\s\w+\s(\d+)", rawData)[0]
             seasonNumber = reSearch[0]
@@ -333,17 +334,19 @@ def calculate(tab):
                 SetupURL = "https://www.gpro.net/gb/RaceSetup.asp"
 
                 # Get session data
-                browser.follow_link(url_regex=re.compile("Qualify.asp"))
-                Q1Result = browser.response().get_data()
-                browser.back()
-
-                browser.follow_link(url_regex=re.compile("Qualify2.asp"))
-                Q2Result = browser.response().get_data()
-                browser.back()
-
-                browser.follow_link(url_regex=re.compile("RaceSetup.asp"))
-                SetupResult = browser.response().get_data()
-                browser.back()
+                driver.get(Q1URL)
+                if(not checkSession(driver)): login(driver, username, password)
+                time.sleep(1)
+                Q1Result = driver.page_source
+                driver.get(Q2URL)
+                if(not checkSession(driver)): login(driver, username, password)
+                time.sleep(1)
+                Q2Result = driver.page_source
+                driver.get(SetupURL)
+                if(not checkSession(driver)): login(driver, username, password)
+                
+                time.sleep(1)
+                SetupResult = driver.page_source
 
                 # List to store the created dictionaries, for easier looped writing
                 sessionDicts = []
@@ -558,9 +561,10 @@ def calculate(tab):
                 raceDict["Session"] = "Race"
 
                 # Define the race URL and get page data
-                browser.follow_link(url_regex=re.compile("RaceAnalysis"))
-                tree = html.fromstring(browser.response().get_data())
-                browser.back()
+                driver.get("https://www.gpro.net/gb/RaceAnalysis.asp")
+                if(not checkSession(driver)): login(driver, username, password)
+                time.sleep(1)
+                tree = html.fromstring(driver.page_source)                
 
                 # Find setup informaiton
                 raceSetupSearch = tree.xpath("//td[contains(text(), 'Race')]/../td/text()")
@@ -767,7 +771,9 @@ def calculate(tab):
         foregroundColour("Status.Label", "#00FF00")
         root.after(1000, lambda: foregroundColour("Status.Label", "Black"))
     except Exception:
-        logger.exception("Something went wrong with calculations, see exception")
+        logger.exception("Something went wrong with calculations, see exception")  
+    finally:
+        driver.quit()
 
 
 def fillWear():
@@ -783,21 +789,18 @@ def fillWear():
             root.after(1000, lambda: foregroundColour("Status.Label", "Black"))
             return
 
-        # Create our logon payload. 'hiddenToken' may change at a later date.
         logger.info("Starting GPRO session for wear fill")
 
         # Logon to GPRO using the logon information provided and store that under our session
-        browser = mechanize.Browser()
-        browser.open("https://gpro.net/gb/Login.asp")
-        browser.select_form(id="Form1")
-        browser.form["textLogin"] = username
-        browser.form["textPassword"] = password
-        browser.submit()
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.get("https://gpro.net/gb/UpdateCar.asp")
+        driver.find_element(By.NAME, "textLogin").send_keys(username)
+        driver.find_element(By.NAME, "textPassword").send_keys(password)
+        driver.find_element(By.ID, "LogonFake").click()
+        time.sleep(1)
 
         # Request the car information page and scrape the car character and part level and wear data
-        browser.follow_link(url_regex=re.compile("UpdateCar"))
-        tree = html.fromstring(browser.response().get_data())
-        browser.back()
+        tree = html.fromstring(driver.page_source)
 
         wearlevelChassis.set(int(tree.xpath("normalize-space(//b[contains(text(), 'Chassis')]/../../td[2]/text())")))
         wearlevelEngine.set(int(tree.xpath("normalize-space(//b[contains(text(), 'Engine')]/../../td[2]/text())")))
@@ -894,19 +897,17 @@ def fillProfile():
             return
 
         # Logon to GPRO using the logon information provided and store that under our session
-        browser = mechanize.Browser()
-        browser.open("https://gpro.net/gb/Login.asp")
-        browser.select_form(id="Form1")
-        browser.form["textLogin"] = username
-        browser.form["textPassword"] = password
-        browser.submit()
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.get("https://www.gpro.net/gb/UpdateCar.asp")
+        driver.find_element(By.NAME, "textLogin").send_keys(username)
+        driver.find_element(By.NAME, "textPassword").send_keys(password)
+        driver.find_element(By.ID, "LogonFake").click()
+        time.sleep(1)
 
         # Request the car information page and scrape the car character and part level and wear data
-        browser.follow_link(url_regex=re.compile("UpdateCar"))
-        tree = html.fromstring(browser.response().get_data())
-        browser.back()
+        tree = html.fromstring(driver.page_source)
 
-        profilelevelChassis.set(int(tree.xpath("normalize-space(//b[contains(text(), 'Chassis')]/../../td[2]/text())")))
+        profilelevelChassis.set(int(tree.xpath("normalize-space(//b[contains(text(), 'Chassis')]/../../td[2]/text())")))        
         profilelevelEngine.set(int(tree.xpath("normalize-space(//b[contains(text(), 'Engine')]/../../td[2]/text())")))
         profilelevelFWing.set(
             int(tree.xpath("normalize-space(//b[contains(text(), 'Front wing')]/../../td[2]/text())")))
