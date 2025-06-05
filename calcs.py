@@ -24,7 +24,7 @@ def setupCalc(username, password, weather, sessionTemp):
 	time.sleep(1)
 
 	# Request the driver information page and scrape the driver data
-	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=24589")
+	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=23640")
 	tree = html.fromstring(driver.page_source)
 
 	driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
