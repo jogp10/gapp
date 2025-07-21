@@ -126,6 +126,6 @@ dmypy.json
 .venv/
 
 # CSV Files
-*.csv
+# *.csv
 
 # End of https://www.gitignore.io/api/python

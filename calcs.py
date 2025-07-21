@@ -24,7 +24,7 @@ def setupCalc(username, password, weather, sessionTemp):
 	time.sleep(1)
 
 	# Request the driver information page and scrape the driver data
-	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=23640")
+	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=20325")
 	tree = html.fromstring(driver.page_source)
 
 	driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
@@ -40,7 +40,8 @@ def setupCalc(username, password, weather, sessionTemp):
 
 	trackName = str(tree.xpath("normalize-space(//h1[contains(@class, 'block')]/text())"))
 	trackName = trackName.strip()
-
+	# trackName = "Monte Carlo"
+ 
 	# Request race strategy pace and scrape the race weather data
 	driver.get("https://gpro.net/gb/RaceSetup.asp")
 	tree = html.fromstring(driver.page_source)
@@ -405,7 +406,7 @@ def strategyCalc(username, password, minimumWear, laps):
 	carLevelElectronics = int(tree.xpath("normalize-space(//b[contains(text(), 'Electronics')]/../../td[2]/text())"))
 
 	# Request the driver information page and scrape the driver data
-	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=24589")
+	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=20325")
 	tree = html.fromstring(driver.page_source)
 	driver.quit()
 

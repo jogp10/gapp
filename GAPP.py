@@ -216,7 +216,7 @@ def calculate(tab):
             
             # Get the driver details
             logger.info("Getting Driver information")
-            driver.get("https://gpro.net/gb/DriverProfile.asp?ID=24589")
+            driver.get("https://gpro.net/gb/DriverProfile.asp?ID=20325")
             tree = html.fromstring(driver.page_source)
             driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
             driverTalent = int(tree.xpath("normalize-space(//td[contains(@id, 'Talent')]/text())"))
