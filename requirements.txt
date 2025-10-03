@@ -1,0 +1,10 @@
+# GAPP - Python Package Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+selenium>=4.0.0
+lxml>=4.9.0
+
+# Optional dependencies for other scripts
+requests>=2.31.0
+beautifulsoup4>=4.12.0

@@ -17,6 +17,18 @@ GPRO Setup and Strategy APP
 
 ---
 
+## Building a Distributable Executable
+
+Want to share GAPP with users who don't have Python installed? See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete instructions.
+
+**Quick Start:**
+- Linux/macOS: `./build.sh`
+- Windows: `build.bat`
+
+The standalone executable will be created in the `dist/` folder.
+
+---
+
 ## Features
 
 GAPP will let you calculate the optimal setup for your in each session, with differing weather conditions.
