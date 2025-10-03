@@ -148,7 +148,9 @@ chmod +x GAPP
 ### First Run
 
 On first run, the application will:
-1. Create data directory: `~/Documents/GAPP/`
+1. Create application directories:
+   - **Linux/macOS**: `~/.local/share/gapp/` (data) and `~/.config/gapp/` (config)
+   - **Windows**: `%APPDATA%\GAPP\` (typically `C:\Users\<username>\AppData\Roaming\GAPP\`)
 2. Create log files: `error.log`, `logging.log`
 3. Prompt for GPRO credentials
 
@@ -223,7 +225,9 @@ chmod +x build.sh
 - Make sure Chrome is in system PATH
 
 **Application won't start:**
-- Check `error.log` in `~/Documents/GAPP/`
+- Check `error.log` in:
+  - **Linux/macOS**: `~/.local/share/gapp/error.log`
+  - **Windows**: `%APPDATA%\GAPP\error.log`
 - Run from terminal to see error messages:
   ```bash
   ./dist/GAPP  # Linux/macOS
@@ -359,9 +363,8 @@ root.title(f"GAPP v{VERSION}")
 ### Credentials Storage
 
 The application stores credentials in:
-```
-~/Documents/GAPP/data.dat
-```
+- **Linux/macOS**: `~/.config/gapp/credentials.dat`
+- **Windows**: `%APPDATA%\GAPP\credentials.dat`
 
 **Security notes:**
 - Credentials are stored in plain text
@@ -384,7 +387,9 @@ Issues building? Check:
 
 Application issues? Check:
 1. Chrome browser installed
-2. Log files: `~/Documents/GAPP/*.log`
+2. Log files in application data directory:
+   - **Linux/macOS**: `~/.local/share/gapp/*.log`
+   - **Windows**: `%APPDATA%\GAPP\*.log`
 3. Valid GPRO credentials
 4. Internet connection
 

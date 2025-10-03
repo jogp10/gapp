@@ -12,15 +12,63 @@ from enum import Enum
 # PATHS AND DIRECTORIES
 # ============================================================================
 
-# Application data directory
-DATA_PATH = Path.home() / "Documents" / "GAPP"
+import sys
+import os
 
-# Log file paths
+def _get_app_data_directory() -> Path:
+    """
+    Get the appropriate application data directory based on the operating system.
+    
+    Returns:
+        Path to application data directory following OS conventions:
+        - Linux/macOS: ~/.local/share/gapp
+        - Windows: %APPDATA%/GAPP (typically C:/Users/<user>/AppData/Roaming/GAPP)
+    """
+    if sys.platform == "win32":
+        # Windows: Use APPDATA
+        appdata = os.getenv('APPDATA')
+        if appdata:
+            return Path(appdata) / "GAPP"
+        # Fallback if APPDATA not set
+        return Path.home() / "AppData" / "Roaming" / "GAPP"
+    else:
+        # Linux/macOS: Use XDG Base Directory Specification
+        xdg_data_home = os.getenv('XDG_DATA_HOME')
+        if xdg_data_home:
+            return Path(xdg_data_home) / "gapp"
+        return Path.home() / ".local" / "share" / "gapp"
+
+
+def _get_app_config_directory() -> Path:
+    """
+    Get the appropriate configuration directory based on the operating system.
+    
+    Returns:
+        Path to configuration directory following OS conventions:
+        - Linux/macOS: ~/.config/gapp
+        - Windows: %APPDATA%/GAPP (same as data on Windows)
+    """
+    if sys.platform == "win32":
+        # Windows: Use same directory as data
+        return _get_app_data_directory()
+    else:
+        # Linux/macOS: Use XDG Base Directory Specification
+        xdg_config_home = os.getenv('XDG_CONFIG_HOME')
+        if xdg_config_home:
+            return Path(xdg_config_home) / "gapp"
+        return Path.home() / ".config" / "gapp"
+
+
+# Application directories
+DATA_PATH = _get_app_data_directory()
+CONFIG_PATH = _get_app_config_directory()
+
+# Log file paths (stored in data directory)
 ERROR_LOG_FILE = DATA_PATH / "error.log"
 GENERAL_LOG_FILE = DATA_PATH / "logging.log"
 
-# Credentials storage
-CREDENTIALS_FILE = DATA_PATH / "data.dat"
+# Credentials storage (stored in config directory)
+CREDENTIALS_FILE = CONFIG_PATH / "credentials.dat"
 
 # ============================================================================
 # GPRO URLS
@@ -218,8 +266,15 @@ def get_wear_status(wear_value: int) -> WearStatus:
 
 
 def ensure_data_directory() -> None:
-    """Ensure the data directory exists, creating it if necessary."""
+    """
+    Ensure the data and config directories exist, creating them if necessary.
+    
+    Creates:
+        - Data directory for logs and application data
+        - Config directory for user settings and credentials
+    """
     DATA_PATH.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.mkdir(parents=True, exist_ok=True)
 
 
 def extract_driver_id_from_url(url_string: str) -> int:

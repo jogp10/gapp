@@ -4,6 +4,16 @@
 
 GPRO Setup and Strategy APP
 
+## 🔔 Important Notice: Data Location Change
+
+**GAPP now uses standard OS locations for storing data:**
+- **Linux/macOS**: `~/.local/share/gapp/` and `~/.config/gapp/`
+- **Windows**: `%APPDATA%\GAPP\`
+
+**Existing users:** See [MIGRATION.md](MIGRATION.md) for migration instructions.
+
+---
+
 ## Building a Distributable Executable
 
 Want to share GAPP with users who don't have Python installed? See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete instructions.
