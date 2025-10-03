@@ -4,19 +4,6 @@
 
 GPRO Setup and Strategy APP
 
-## Recent Updates (October 2025)
-
-🎉 **Major Refactoring Completed** - See [REFACTORING.md](REFACTORING.md) for details.
-
-**Key Improvements:**
-- ✅ **Dynamic driver ID extraction** - Works for any GPRO user automatically (no manual setup!)
-- ✅ **Centralized configuration** - All constants in `config.py`
-- ✅ **Type hints** - Better IDE support and error detection
-- ✅ **Improved error handling** - Specific exceptions with logging
-- ✅ **No hard-coded values** - URLs, thresholds, paths all configurable
-
----
-
 ## Building a Distributable Executable
 
 Want to share GAPP with users who don't have Python installed? See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete instructions.
@@ -47,7 +34,3 @@ Planned changes:
 * Integrate clear track risk into strategy calculator
 * Account for tyre "wobble" and wear in the strategy calculator
 * Automate data collection for long term analysis
-
-If you have any suggestions or features you'd like to see in GAPP, please don't hesitate to contact me at:
-
-*JakeR1342@gmail.com*
