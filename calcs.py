@@ -1,13 +1,26 @@
 import math
 import re
+import logging
+from typing import List, Tuple, Union
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import WebDriverException
 from lxml import html
 import time
 
 from data import *
 from funcs import chrome_options
+from config import (
+    GPRO_LOGIN_URL, GPRO_HOME_URL, GPRO_DRIVER_PROFILE_URL, GPRO_TRACK_DETAILS_URL,
+    GPRO_RACE_SETUP_URL, GPRO_UPDATE_CAR_URL, GPRO_TECH_DIRECTOR_URL,
+    GPRO_STAFF_URL, GPRO_SUPPLIERS_URL, DRIVER_ID_XPATH,
+    LOGIN_USERNAME_FIELD, LOGIN_PASSWORD_FIELD, LOGIN_BUTTON_ID,
+    LOGIN_WAIT_TIME, PATTERN_INTEGER, extract_driver_id_from_url
+)
+
+logger = logging.getLogger(__name__)
+
 '''
 ----- setupCalc -----
 Setup Calc takes the user information for accessing GPRO and calculates the entire car setup
@@ -15,17 +28,48 @@ for the weekend, including session weather and temperature.
 '''
 
 
-def setupCalc(username, password, weather, sessionTemp):
+def setupCalc(username: str, password: str, weather: str, sessionTemp: str) -> List[int]:
+	"""
+	Calculate car setup based on weather, session, and driver/car data from GPRO.
+	
+	Args:
+		username: GPRO username/email
+		password: GPRO password
+		weather: Weather condition ("Dry" or "Wet")
+		sessionTemp: Session type ("Race", "Q1", or "Q2")
+		
+	Returns:
+		List of setup values: [front_wing, rear_wing, engine, brakes, gear, suspension]
+	"""
 	driver = webdriver.Chrome(options=chrome_options)
-	driver.get("https://gpro.net/gb/Login.asp")
-	driver.find_element(By.NAME, "textLogin").send_keys(username)
-	driver.find_element(By.NAME, "textPassword").send_keys(password)
-	driver.find_element(By.ID, "LogonFake").click()
-	time.sleep(1)
+	try:
+		driver.get(GPRO_LOGIN_URL)
+		driver.find_element(By.NAME, LOGIN_USERNAME_FIELD).send_keys(username)
+		driver.find_element(By.NAME, LOGIN_PASSWORD_FIELD).send_keys(password)
+		driver.find_element(By.ID, LOGIN_BUTTON_ID).click()
+		time.sleep(LOGIN_WAIT_TIME)
 
-	# Request the driver information page and scrape the driver data
-	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=20325")
-	tree = html.fromstring(driver.page_source)
+		# Get home page to extract driver ID dynamically
+		logger.info("Fetching home page to extract driver ID")
+		driver.get(GPRO_HOME_URL)
+		tree = html.fromstring(driver.page_source)
+		
+		# Extract driver ID from the DriverProfile.asp link
+		driver_profile_href = str(tree.xpath(DRIVER_ID_XPATH))
+		driver_id = extract_driver_id_from_url(driver_profile_href)
+		logger.info(f"Extracted driver ID: {driver_id}")
+
+		# Request the driver information page and scrape the driver data
+		driver.get(f"{GPRO_DRIVER_PROFILE_URL}?ID={driver_id}")
+		tree = html.fromstring(driver.page_source)
+	except WebDriverException as e:
+		logger.error(f"WebDriver error in setupCalc: {e}")
+		driver.quit()
+		raise
+	except ValueError as e:
+		logger.error(f"Failed to extract driver ID: {e}")
+		driver.quit()
+		raise
 
 	driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
 	driverTalent = int(tree.xpath("normalize-space(//td[contains(@id, 'Talent')]/text())"))
@@ -35,7 +79,7 @@ def setupCalc(username, password, weather, sessionTemp):
 	driverWeight = int(tree.xpath("normalize-space(//tr[contains(@data-step, '14')]//td/text())"))
 
 	# Request the track information page and scrape the track data
-	driver.get("https://gpro.net/gb/TrackDetails.asp")
+	driver.get(GPRO_TRACK_DETAILS_URL)
 	tree = html.fromstring(driver.page_source)
 
 	trackName = str(tree.xpath("normalize-space(//h1[contains(@class, 'block')]/text())"))
@@ -43,7 +87,7 @@ def setupCalc(username, password, weather, sessionTemp):
 	# trackName = "Monte Carlo"
  
 	# Request race strategy pace and scrape the race weather data
-	driver.get("https://gpro.net/gb/RaceSetup.asp")
+	driver.get(GPRO_RACE_SETUP_URL)
 	tree = html.fromstring(driver.page_source)
 
 	rTempRangeOne = str(tree.xpath("normalize-space(//td[contains(text(), 'Temp')]/../../tr[2]/td[1]/text())"))
@@ -77,7 +121,7 @@ def setupCalc(username, password, weather, sessionTemp):
 		sessionTemp = qTwoTemp
 
 	# Request the car information page and scrape the car character and part level and wear data
-	driver.get("https://gpro.net/gb/UpdateCar.asp")
+	driver.get(GPRO_UPDATE_CAR_URL)
 	tree = html.fromstring(driver.page_source)
 	driver.quit()
  
@@ -317,14 +361,24 @@ def strategyCalc(username, password, minimumWear, laps):
     '''
 
 	driver = webdriver.Chrome(options=chrome_options)
-	driver.get("https://gpro.net/gb/Login.asp")
-	driver.find_element(By.NAME, "textLogin").send_keys(username)
-	driver.find_element(By.NAME, "textPassword").send_keys(password)
-	driver.find_element(By.ID, "LogonFake").click()
-	time.sleep(1)
+	driver.get(GPRO_LOGIN_URL)
+	driver.find_element(By.NAME, LOGIN_USERNAME_FIELD).send_keys(username)
+	driver.find_element(By.NAME, LOGIN_PASSWORD_FIELD).send_keys(password)
+	driver.find_element(By.ID, LOGIN_BUTTON_ID).click()
+	time.sleep(LOGIN_WAIT_TIME)
+	
+	# Get home page to extract driver ID dynamically
+	logger.info("Fetching home page to extract driver ID")
+	driver.get(GPRO_HOME_URL)
+	tree = html.fromstring(driver.page_source)
+	
+	# Extract driver ID from the DriverProfile.asp link
+	driver_profile_href = str(tree.xpath(DRIVER_ID_XPATH))
+	driver_id = extract_driver_id_from_url(driver_profile_href)
+	logger.info(f"Extracted driver ID: {driver_id}")
 
 	# Request the track information page and scrape the track data
-	driver.get("https://gpro.net/gb/TrackDetails.asp")
+	driver.get(GPRO_TRACK_DETAILS_URL)
 	tree = html.fromstring(driver.page_source)
 
 	trackName = str(tree.xpath("normalize-space(//h1[contains(@class, 'block')]/text())"))
@@ -349,7 +403,7 @@ def strategyCalc(username, password, minimumWear, laps):
 
 	# Check, while we're here, if the manager has a Technical Director and if they do, gather the TD stats
 	try:
-		driver.get("https://gpro.net/gb/TechDProfile.asp")
+		driver.get(GPRO_TECH_DIRECTOR_URL)
 		technicalDirectorResult = html.fromstring(driver.page_source)
 
 		tree = html.fromstring(technicalDirectorResult.content)
@@ -363,14 +417,14 @@ def strategyCalc(username, password, minimumWear, laps):
 		tdPitCoordination = 0
 
 	# Request the staff page and scrape staff data
-	driver.get("https://gpro.net/gb/StaffAndFacilities.asp")
+	driver.get(GPRO_STAFF_URL)
 	tree = html.fromstring(driver.page_source)
 
 	staffConcentration = int(tree.xpath("//th[contains(text(), 'Concentration:')]/../td/text()")[0])
 	staffStress = int(tree.xpath("//th[contains(text(), 'Stress handling:')]/../td/text()")[0])
 
 	# Request race strategy pace and scrape the race weather data
-	driver.get("https://gpro.net/gb/RaceSetup.asp")
+	driver.get(GPRO_RACE_SETUP_URL)
 	tree = html.fromstring(driver.page_source)
 
 	rTempRangeOne = str(tree.xpath("normalize-space(//td[contains(text(), 'Temp')]/../../tr[2]/td[1]/text())"))
@@ -391,13 +445,13 @@ def strategyCalc(username, password, minimumWear, laps):
 		rTempMinFour + rTempMaxFour)) / 8
 
 	# Request the manager page and scrape tyre data
-	driver.get("https://gpro.net/gb/Suppliers.asp")
+	driver.get(GPRO_SUPPLIERS_URL)
 	tree = html.fromstring(driver.page_source)
 
 	tyreSupplierName = str(tree.xpath("//div[contains(@class, 'chosen')]/h2/text()")[0])
 
 	# Request the car information page and scrape the car character and part level and wear data
-	driver.get("https://gpro.net/gb/UpdateCar.asp")
+	driver.get(GPRO_UPDATE_CAR_URL)
 	tree = html.fromstring(driver.page_source)
 
 	# Level
@@ -406,7 +460,7 @@ def strategyCalc(username, password, minimumWear, laps):
 	carLevelElectronics = int(tree.xpath("normalize-space(//b[contains(text(), 'Electronics')]/../../td[2]/text())"))
 
 	# Request the driver information page and scrape the driver data
-	driver.get("https://gpro.net/gb/DriverProfile.asp?ID=20325")
+	driver.get(f"{GPRO_DRIVER_PROFILE_URL}?ID={driver_id}")
 	tree = html.fromstring(driver.page_source)
 	driver.quit()
 
@@ -425,7 +479,7 @@ def strategyCalc(username, password, minimumWear, laps):
 	trackWearLevel = {"Very low": 0, "Low": 1, "Medium": 2, "High": 3, "Very high": 4}
 	wearFactors = [0.998163750229071, 0.997064844817654, 0.996380346554349, 0.995862526048112, 0.996087854384523]
 
-	# Calcualte the number of stops for each tyre choice
+	# Calculate the number of stops for each tyre choice
 	stops = []
 	for i in range(4):
 		stops.append(int(stopCalc(trackDistanceFloat, trackWearLevel[trackTyreWearRating], rTemp,
@@ -532,8 +586,11 @@ wearLimit = The manager chosen limit for tyre wear before pitting, so at 10%, we
 
 
 # trackLapsInt, trackWearLevel[trackTyreWearRating], rTemp, tyreSupplierFactor[tyreSupplierName], i, carLevelSuspension, driverAggressiveness, driverExperience, driverWeight, float(trackData[trackName][9]), minimumWear, wearFactors[i]
-def stopCalc(trackDistanceTotal, trackWearLevel, rTemp, tyreSupplierFactor, tyreType, carLevelSuspension,
-			 driverAggressiveness, driverExperience, driverWeight, trackBaseWear, wearLimit, tyreWearFactor, wetFactor):
+def stopCalc(trackDistanceTotal: float, trackWearLevel: int, rTemp: float, 
+			 tyreSupplierFactor: int, tyreType: int, carLevelSuspension: int,
+			 driverAggressiveness: int, driverExperience: int, driverWeight: int, 
+			 trackBaseWear: float, wearLimit: float, tyreWearFactor: float, wetFactor: float) -> int:
+	"""Calculate the number of pit stops required based on tyre wear."""
 	baseWear = 129.776458172062
 	productFactors = (0.896416176238624 ** trackWearLevel) * (0.988463622 ** rTemp) * (
 		1.048876356 ** tyreSupplierFactor) * (1.355293715 ** tyreType) * (1.009339294 ** carLevelSuspension) * (
@@ -550,7 +607,8 @@ Here we very simply calculate how much fuel we will need across the entire race 
 '''
 
 
-def fuelLoadCalc(trackDistanceTotal, trackFuelBase, fuelFactor, stints):
+def fuelLoadCalc(trackDistanceTotal: float, trackFuelBase: float, fuelFactor: float, stints: int) -> int:
+	"""Calculate fuel load needed per stint."""
 	fuelLoad = math.ceil((trackDistanceTotal * (trackFuelBase + fuelFactor)) / stints)
 	return fuelLoad
 
@@ -560,7 +618,9 @@ Same as Fuel Load Calc but for custom stint
 '''
 
 
-def customLapFuelLoadCalc(trackDistanceTotal, trackFuelBase, fuelFactor, trackLapsCount, laps):
+def customLapFuelLoadCalc(trackDistanceTotal: float, trackFuelBase: float, fuelFactor: float, 
+							  trackLapsCount: int, laps: int) -> float:
+	"""Calculate fuel load for a custom number of laps."""
 	fuelLoad = (laps * (trackDistanceTotal * (trackFuelBase + fuelFactor)) / trackLapsCount)
 	return fuelLoad
 
@@ -572,9 +632,11 @@ i.e. Longer stints mean more fuel but less stops so less overall time
 '''
 
 
-def pitTimeCalc(fuelLoad, tdInfluenceFuel, tdInfluenceStaffConcentration, staffConcentration, tdInfluenceStaffStress,
-				staffStress, tdInfluenceExperience, tdExperience, tdInfluencePitCoordination, tdPitCoordination,
-				pitInOut):
+def pitTimeCalc(fuelLoad: int, tdInfluenceFuel: float, tdInfluenceStaffConcentration: float, 
+				staffConcentration: int, tdInfluenceStaffStress: float, staffStress: int, 
+				tdInfluenceExperience: float, tdExperience: int, tdInfluencePitCoordination: float, 
+				tdPitCoordination: int, pitInOut: float) -> float:
+	"""Calculate pit stop time based on fuel load and technical director factors."""
 	return round(((fuelLoad * tdInfluenceFuel) + 24.26 + (tdInfluenceStaffConcentration * staffConcentration) + (
 		tdInfluenceStaffStress * staffStress) + (tdInfluenceExperience * tdExperience) + (
 					  tdInfluencePitCoordination * tdPitCoordination) + pitInOut), 2)
@@ -587,7 +649,8 @@ The idea here is that running longer stints means carrying around more fuel whic
 '''
 
 
-def fuelTimeCalc(trackLapsCount, trackFuelBase, fuelFactor, stints):
+def fuelTimeCalc(trackLapsCount: float, trackFuelBase: float, fuelFactor: float, stints: int) -> float:
+	"""Calculate time lost due to carrying fuel weight."""
 	return (0.0025 * ((trackLapsCount * trackLapsCount * (trackFuelBase + fuelFactor)) / stints))
 
 
@@ -602,7 +665,9 @@ the idea is to take into consideration that time lost, which is roughly 1-2 seco
 '''
 
 
-def compoundCalc(trackLapsCount, trackCornerCount, trackDistanceLap, rTemp, tyreCompoundSupplierFactor):
+def compoundCalc(trackLapsCount: int, trackCornerCount: float, trackDistanceLap: float, 
+				 rTemp: float, tyreCompoundSupplierFactor: float) -> float:
+	"""Calculate time lost from using a specific tyre compound."""
 	return (trackLapsCount * (
 		(trackCornerCount * trackDistanceLap * 0.00018 * (50 - rTemp)) + tyreCompoundSupplierFactor))
 
@@ -616,11 +681,13 @@ Painfully simple function
 '''
 
 
-def totalTimeCalc(pitTime, compoundTime, fuelTime):
+def totalTimeCalc(pitTime: float, compoundTime: float, fuelTime: float) -> float:
+	"""Calculate total time lost/gained for a tyre strategy."""
 	return round(pitTime + compoundTime + fuelTime, 2)
 
 
-def profileCalc(partName, partLevel):
+def profileCalc(partName: str, partLevel: int) -> List[float]:
+	"""Calculate Power, Handling, Acceleration values for a car part."""
 	P = H = A = 0
 	profile = [P, H, A]
 
@@ -630,6 +697,8 @@ def profileCalc(partName, partLevel):
 	return profile
 
 
-def wearCalc(startWear, partLevel, driverFactor, trackName, clearTrackRisk, i):
+def wearCalc(startWear: int, partLevel: int, driverFactor: float, trackName: str, 
+			 clearTrackRisk: int, i: int) -> float:
+	"""Calculate wear for a car part during a race."""
 	levelFactors = [1.0193, 1.0100, 1.0073, 1.0053, 1.0043, 1.0037, 1.0043, 1.0097, 1.0052]
 	return (wearData[trackName][i] * (levelFactors[partLevel - 1] ** clearTrackRisk) * driverFactor)

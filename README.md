@@ -4,6 +4,21 @@
 
 GPRO Setup and Strategy APP
 
+## Recent Updates (October 2025)
+
+🎉 **Major Refactoring Completed** - See [REFACTORING.md](REFACTORING.md) for details.
+
+**Key Improvements:**
+- ✅ **Dynamic driver ID extraction** - Works for any GPRO user automatically (no manual setup!)
+- ✅ **Centralized configuration** - All constants in `config.py`
+- ✅ **Type hints** - Better IDE support and error detection
+- ✅ **Improved error handling** - Specific exceptions with logging
+- ✅ **No hard-coded values** - URLs, thresholds, paths all configurable
+
+---
+
+## Features
+
 GAPP will let you calculate the optimal setup for your in each session, with differing weather conditions.
 It also provides a strategy calculator, as well as a wear predictor, meaning you'll never get caught out again!
 

@@ -2,37 +2,46 @@ import csv  # For writing data to CSV files
 import logging  # For error handling and debugging
 import os  # For getting directory paths
 import threading  # For multi threading
+import re
 from pathlib import Path  # For data paths
 from tkinter import BOTH, DoubleVar, E, IntVar, S, StringVar, Tk, W, ttk  # To create the GUI
 from tkinter.ttk import Notebook  # For tabs in the GUI
+from typing import Optional
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import WebDriverException
 
 from lxml import html
-import re
 
 # Import external data
 from calcs import profileCalc, setupCalc, strategyCalc, wearCalc
 from funcs import *
+from config import (
+    DATA_PATH, ERROR_LOG_FILE, GENERAL_LOG_FILE, CREDENTIALS_FILE,
+    LOG_FORMAT, LOG_DATE_FORMAT, DEFAULT_SETUP_VALUE, DEFAULT_WEATHER,
+    DEFAULT_SESSION, DEFAULT_WEAR_PERCENTAGE, DEFAULT_LAPS,
+    DEFAULT_FUEL_LOWER, DEFAULT_FUEL_UPPER, PATTERN_INTEGER, PATTERN_FLOAT,
+    GPRO_LOGIN_URL, GPRO_HOME_URL, GPRO_DRIVER_PROFILE_URL, GPRO_TRACK_DETAILS_URL,
+    DRIVER_ID_XPATH, LOGIN_USERNAME_FIELD, LOGIN_PASSWORD_FIELD, LOGIN_BUTTON_ID,
+    LOGIN_WAIT_TIME, get_wear_status, ensure_data_directory, extract_driver_id_from_url
+)
 
 # Logging setup
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    datefmt='%y-%m-%d %H:%M')
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
+
+# Ensure data directory exists
+ensure_data_directory()
+
 # Handlers
-dataPath = str(Path.home()) + "/Documents/GAPP"
-if not os.path.exists(dataPath):
-    os.makedirs(dataPath)
-fLogFileName = str(Path.home()) + r"/Documents/GAPP/error.log"
-gLogFileName = str(Path.home()) + r"/Documents/GAPP/logging.log"
-f_handler = logging.FileHandler(fLogFileName)
-g_handler = logging.FileHandler(gLogFileName)
+f_handler = logging.FileHandler(ERROR_LOG_FILE)
+g_handler = logging.FileHandler(GENERAL_LOG_FILE)
 f_handler.setLevel(logging.ERROR)
 g_handler.setLevel(logging.DEBUG)
 # Handler Format
-f_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-g_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+f_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+g_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 # Add Handlers
 logger.addHandler(f_handler)
 logger.addHandler(g_handler)
@@ -53,38 +62,48 @@ class Autoresized_Notebook(Notebook):
 Data Storage Setup
 '''
 logger.info("Getting reference to GAPP folder in Documents for storage")
-dataPath = str(Path.home()) + "/Documents/GAPP"
-if not os.path.exists(dataPath):
+dataPath = str(DATA_PATH)
+if not DATA_PATH.exists():
     try:
         logger.info("No GAPP folder found in documents, creating it")
-        os.makedirs(dataPath)
-    except Exception:
-        logger.exception("Unable to create GAPP folder in documents, GAPP may not have permissions to do so")
+        DATA_PATH.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logger.exception(f"Unable to create GAPP folder in documents: {e}")
+    except Exception as e:
+        logger.exception(f"Unexpected error creating GAPP folder: {e}")
 
-filename = dataPath + "/data.dat"
+filename = str(CREDENTIALS_FILE)
 
 try:
     logger.info("Creating login data file")
-    open(filename, "x").close()
-except:
+    CREDENTIALS_FILE.touch(exist_ok=True)
+except FileExistsError:
     logger.info("Login data file already exists, skipping")
-    pass
+except OSError as e:
+    logger.error(f"Error creating credentials file: {e}")
 
 try:
     logger.info("Opening login data file for reading")
-    file = open(filename, "r")
-    credentialCheck = int(float(file.readline()))
-    username = file.readline()
-    password = file.readline()
+    with open(filename, "r") as file:
+        credentialCheck = int(float(file.readline()))
+        username = file.readline()
+        password = file.readline()
     logger.info("Login data file read successfully")
-except:
-    logger.info("Unable to open or read login data file, setting credential check to 0")
+except FileNotFoundError:
+    logger.info("Login data file not found, setting credential check to 0")
     username = ""
     password = ""
     credentialCheck = 0
-finally:
-    logger.info("Closing login data file")
-    file.close()
+except ValueError as e:
+    logger.warning(f"Invalid data in credentials file: {e}")
+    username = ""
+    password = ""
+    credentialCheck = 0
+except IOError as e:
+    logger.error(f"Unable to read login data file: {e}")
+    username = ""
+    password = ""
+    credentialCheck = 0
 
 
 # Thread Controller - starts and manages threads as required
@@ -132,7 +151,7 @@ def calculate(tab):
         password = str(inputPassword.get())
         driver = webdriver.Chrome(options=chrome_options)
 
-        logger.info("Checking user login details are correct and user is in Viper team")
+        logger.info("Checking user login details are correct")
         if (not checkLogin(username, password)):
             logger.warning("Login details are incorrect")
             warningLabel.set("Incorrect Login Details")
@@ -141,7 +160,7 @@ def calculate(tab):
             return
 
         if (tab == "Setup"):
-            logger.info("Starting Setup calcuation")
+            logger.info("Starting Setup calculation")
             weather = str(inputWeather.get())
             session = str(inputSession.get())
             setup = setupCalc(username, password, weather, session)
@@ -156,24 +175,23 @@ def calculate(tab):
         elif (tab == "Strategy"):
             logger.info("Getting strategy input")
             try:
-                wear = float(re.findall(r'\d+', inputWear.get())[0])
-            except:
-                try:
-                    wear = float(re.findall(r'\d+.\d+', inputWear.get())[0])
-                except:
-                    logger.warning("Wear input incorrect format, despite input control")
-                    wear = 0.0
-                    inputWear.set(0)
+                # Try to extract float from input
+                match = re.search(PATTERN_FLOAT, inputWear.get())
+                if match:
+                    wear = float(match.group())
+                else:
+                    raise ValueError("No numeric value found in wear input")
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Wear input incorrect format: {e}")
+                wear = 0.0
+                inputWear.set("0")
 
             try:
-                laps = int(re.findall(r'\d+', inputLaps.get())[0])
-            except:
-                try:
-                    laps = inputLaps.get()
-                except:
-                    logger.warning("Laps input incorrect format, despite input control")
-                    laps = 0
-                    inputLaps.set(0)
+                laps = int(inputLaps.get())
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Laps input incorrect format: {e}")
+                laps = 0
+                inputLaps.set(0)
 
             lapsUpper.set(laps + 1)
             logger.info("Starting Strategy calculation")
@@ -208,15 +226,25 @@ def calculate(tab):
             password = entryPassword.get()
 
             # Logon to GPRO using the logon information provided and store that under our session            
-            driver.get("https://gpro.net/gb/Login.asp")
-            driver.find_element(By.NAME, "textLogin").send_keys(username)
-            driver.find_element(By.NAME, "textPassword").send_keys(password)
-            driver.find_element(By.ID, "LogonFake").click()
-            time.sleep(1)
+            driver.get(GPRO_LOGIN_URL)
+            driver.find_element(By.NAME, LOGIN_USERNAME_FIELD).send_keys(username)
+            driver.find_element(By.NAME, LOGIN_PASSWORD_FIELD).send_keys(password)
+            driver.find_element(By.ID, LOGIN_BUTTON_ID).click()
+            time.sleep(LOGIN_WAIT_TIME)
+            
+            # Get home page to extract driver ID dynamically
+            logger.info("Fetching home page to extract driver ID")
+            driver.get(GPRO_HOME_URL)
+            tree = html.fromstring(driver.page_source)
+            
+            # Extract driver ID from the DriverProfile.asp link
+            driver_profile_href = str(tree.xpath(DRIVER_ID_XPATH))
+            driver_id = extract_driver_id_from_url(driver_profile_href)
+            logger.info(f"Extracted driver ID: {driver_id}")
             
             # Get the driver details
             logger.info("Getting Driver information")
-            driver.get("https://gpro.net/gb/DriverProfile.asp?ID=20325")
+            driver.get(f"{GPRO_DRIVER_PROFILE_URL}?ID={driver_id}")
             tree = html.fromstring(driver.page_source)
             driverConcentration = int(tree.xpath("normalize-space(//td[contains(@id, 'Conc')]/text())"))
             driverTalent = int(tree.xpath("normalize-space(//td[contains(@id, 'Talent')]/text())"))
@@ -226,26 +254,29 @@ def calculate(tab):
 
             # Get the track details
             logger.info("Getting track information")
-            driver.get("https://gpro.net/gb/TrackDetails.asp")
+            driver.get(GPRO_TRACK_DETAILS_URL)
             tree = html.fromstring(driver.page_source)
             trackName = str(tree.xpath("normalize-space(//h1[contains(@class, 'block')]/text())"))
             trackName = trackName.strip()
 
-            logger.info("Checking user input is in corret format")
+            logger.info("Checking user input is in correct format")
             for i in range(len(startWears)):
                 try:
                     int(startWears[i].get())
-                except:
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Invalid start wear value at index {i}: {e}")
                     startWears[i].set(0)
 
                 try:
                     int(wearlevels[i].get())
-                except:
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Invalid wear level value at index {i}: {e}")
                     wearlevels[i].set(1)
 
             try:
                 int(wearClearTrackRisk.get())
-            except:
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Invalid clear track risk value: {e}")
                 wearClearTrackRisk.set(0)
 
             logger.info("Calculating and applying car wear")
@@ -254,12 +285,10 @@ def calculate(tab):
                     wearCalc(startWears[i].get(), int(wearlevels[i].get()), driverFactor, trackName,
                              wearClearTrackRisk.get(), i)), 2))
                 endWears[i].set(int(round(raceWears[i].get() + round(startWears[i].get(), 0), 0)))
-                if (endWears[i].get() >= 90):
-                    endLabels[i].configure(style="Red.Label")
-                elif (endWears[i].get() >= 80):
-                    endLabels[i].configure(style="Orange.Label")
-                else:
-                    endLabels[i].configure(style="Black.Label")
+                
+                # Use config function for wear status
+                wear_status = get_wear_status(endWears[i].get())
+                endLabels[i].configure(style=wear_status.value)
         elif (tab == "PHA"):
             logger.info("Starting PHA calculation")
             partNames = ["Chassis", "Engine", "Front Wing", "Rear Wing", "Underbody", "Sidepods", "Cooling", "Gearbox",
@@ -298,8 +327,14 @@ def calculate(tab):
                         for key in row:
                             rowData[key] = row[key]
                         pastSessionData.append(rowData)
-            except:
-                logger.warning("Unable to open RaceData.csv data file - might not exist or permission is denied")
+            except FileNotFoundError:
+                logger.info("RaceData.csv not found - will be created on first save")
+            except PermissionError:
+                logger.error("Permission denied reading RaceData.csv")
+            except csv.Error as e:
+                logger.error(f"CSV parsing error in RaceData.csv: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error reading RaceData.csv: {e}")
 
             logger.info("Starting pre- and post-race analysis")
             # Create the logon payload and create the session
@@ -959,33 +994,42 @@ def fillProfile():
         logger.exception("Unable to fill car character profile information - see exception for details")
 
 
-def validateFloat(P):
-    if (P == ""):
+def validateFloat(P: str) -> bool:
+    """
+    Validate that input is a valid float or empty.
+    
+    Args:
+        P: Input string to validate
+        
+    Returns:
+        True if valid float or empty, False otherwise
+    """
+    if P == "":
         return True
-    else:
-        try:
-            int(P)
-            return True
-        except:
-            try:
-                float(P)
-                return True
-            except:
-                return False
+    
+    # Use regex pattern from config
+    return bool(re.match(f"^{PATTERN_FLOAT}$", P))
 
 
-def validateInt(P):
-    if (P == ""):
+def validateInt(P: str) -> bool:
+    """
+    Validate that input is a valid integer or empty.
+    
+    Args:
+        P: Input string to validate
+        
+    Returns:
+        True if valid integer or empty, False otherwise
+    """
+    if P == "":
         return True
-    else:
-        try:
-            int(P)
-            return True
-        except:
-            return False
+    
+    # Use regex pattern from config
+    return bool(re.match(f"^{PATTERN_INTEGER}$", P))
 
 
-def foregroundColour(styleName, colourName):
+def foregroundColour(styleName: str, colourName: str) -> None:
+    """Set foreground color for a style."""
     style.configure(styleName, foreground=colourName)
 
 
